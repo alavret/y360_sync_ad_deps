@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-from datetime import datetime
 from ldap3 import Server, Connection, ALL, SUBTREE, ALL_ATTRIBUTES, Tls, MODIFY_REPLACE, set_config_parameter
 from ldap3.core.exceptions import LDAPBindError
 from lib.y360_api.api_script import API360
@@ -34,12 +33,16 @@ def get_ldap_users():
     ldap_password = os.environ.get('LDAP_PASSWORD')
     ldap_base_dn = os.environ.get('LDAP_BASE_DN')
     ldap_search_filter = os.environ.get('LDAP_SEARCH_FILTER')
+    ldaps_enabled = os.environ.get('LDAPS_ENABLED', 'False').lower() == 'true'
 
     attrib_list = list(os.environ.get('ATTRIB_LIST').split(','))
     out_file = os.environ.get('AD_DEPS_OUT_FILE')
 
     users = {}
-    server = Server(ldap_host, port=ldap_port, get_info=ALL) 
+    if ldaps_enabled:
+        server = Server(ldap_host, port=ldap_port, get_info=ALL, use_ssl=True) 
+    else:
+        server = Server(ldap_host, port=ldap_port, get_info=ALL) 
     try:
         conn = Connection(server, user=ldap_user, password=ldap_password, auto_bind=True)
     except LDAPBindError as e:
