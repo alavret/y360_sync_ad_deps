@@ -34,6 +34,7 @@ def get_ldap_users():
     ldap_base_dn = os.environ.get('LDAP_BASE_DN')
     ldap_search_filter = os.environ.get('LDAP_SEARCH_FILTER')
     ldaps_enabled = os.environ.get('LDAPS_ENABLED', 'False').lower() == 'true'
+    use_company = os.environ.get('USE_COMPANY', 'True').lower() == 'true'
 
     attrib_list = list(os.environ.get('ATTRIB_LIST').split(','))
     out_file = os.environ.get('AD_DEPS_OUT_FILE')
@@ -56,8 +57,8 @@ def get_ldap_users():
     users = {}
     conn.search(ldap_base_dn, ldap_search_filter, search_scope=SUBTREE, attributes=attrib_list)
     if conn.last_error is not None:
-        logger.error(f'Can not connect to LDAP. Exit.')
-        logger.error(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
+        logger.error('Can not connect to LDAP. Exit.')
+        logger.error(f"LDAP error: {conn.last_error}")
         return {}
 
     try:            
@@ -73,13 +74,22 @@ def get_ldap_users():
                         if len(item['company'].value.strip()) > 0:
                             company = item['company'].value.strip()
 
-                    if len(department) > 0 and len(company) > 0:
-                        users[item['mail'].value.lower().strip().split('@')[0]] = f'{department.strip()} ({company.strip()})'
-                    elif len(department) > 0:
-                        users[item['mail'].value.lower().strip().split('@')[0]] = f'{department.strip()}'
+                    if use_company:
+                        # Используем текущую логику: department (company) или только department
+                        if len(department) > 0 and len(company) > 0:
+                            users[item['mail'].value.lower().strip().split('@')[0]] = f'{department.strip()} ({company.strip()})'
+                        elif len(department) > 0:
+                            users[item['mail'].value.lower().strip().split('@')[0]] = f'{department.strip()}'
+                        else:
+                            users[item['mail'].value.lower().strip().split('@')[0]] = ''
+                            logger.debug(f'User {item["mail"].value} has empty department or company. Skip.')
                     else:
-                        users[item['mail'].value.lower().strip().split('@')[0]] = ''
-                        logger.debug(f'User {item["mail"].value} has empty department or company. Skip.')
+                        # Используем только department, игнорируем company
+                        if len(department) > 0:
+                            users[item['mail'].value.lower().strip().split('@')[0]] = f'{department.strip()}'
+                        else:
+                            users[item['mail'].value.lower().strip().split('@')[0]] = ''
+                            logger.debug(f'User {item["mail"].value} has empty department. Skip.')
 
     except Exception as e:
         logger.error(f"{type(e).__name__} at line {e.__traceback__.tb_lineno} of {__file__}: {e}")
